@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<title>物业排班系统</title>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<style>
+:root{
+  --blue:#2563eb; --blue-d:#1d4ed8; --bg:#f2f4f8; --card:#fff;
+  --line:#e3e7ee; --txt:#1f2937; --txt2:#6b7280; --red:#dc2626;
+  --topbar-h:52px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;font-size:14px}
+#app{max-width:980px;margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:64px}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* 顶栏 */
+.topbar{position:sticky;top:0;z-index:50;height:var(--topbar-h);background:linear-gradient(135deg,#2563eb,#1e40af);
+  color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.topbar .app-name{font-size:16px;font-weight:700;white-space:nowrap}
+.month-picker{display:flex;align-items:center;gap:4px}
+.month-picker button{width:30px;height:30px;border:none;border-radius:8px;background:rgba(255,255,255,.18);color:#fff;font-size:18px;line-height:1}
+.month-picker select{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;height:30px;padding:0 4px;font-size:14px}
+.month-picker select option{color:#111}
+
+/* 底部导航 */
+.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;max-width:980px;margin:0 auto;display:flex;
+  background:#fff;border-top:1px solid var(--line);box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+.tabbar button{flex:1;border:none;background:none;padding:8px 0 10px;color:var(--txt2);font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tabbar button .ic{font-size:19px;line-height:1}
+.tabbar button.on{color:var(--blue);font-weight:600}
+
+.view{padding:10px}
+.card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.card h3{margin:0 0 10px;font-size:15px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row+.row{margin-top:8px}
+.btn{border:1px solid var(--line);background:#fff;color:var(--txt);border-radius:9px;padding:8px 14px;font-size:14px}
+.btn:active{opacity:.7}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.danger{color:var(--red);border-color:#fecaca;background:#fef2f2}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:7px}
+.btn.block{width:100%;padding:11px;font-size:15px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:var(--txt2)}
+.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;color:var(--txt)}
+.field textarea{resize:vertical;min-height:60px}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.muted{color:var(--txt2);font-size:12px}
+.tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;line-height:1.6}
+.tag.gray{background:#f0f1f3;color:#666}
+.tag.red{background:#fee2e2;color:#b91c1c}
+
+/* 排班网格 */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.toolbar select{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff}
+.grid-wrap{background:#fff;border-radius:12px;overflow:auto;box-shadow:0 1px 3px rgba(0,0,0,.05);max-height:calc(100vh - 170px)}
+table.grid{border-collapse:separate;border-spacing:0;font-size:13px;white-space:nowrap}
+table.grid th,table.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center;padding:0;height:34px;min-width:34px}
+table.grid thead th{background:#eef2fb;position:sticky;top:0;z-index:20;font-weight:600;padding:4px 2px;line-height:1.35}
+table.grid thead th small{font-weight:400;color:var(--txt2)}
+table.grid thead th.we small{color:var(--red)}
+table.grid td.cname,table.grid th.cname{position:sticky;left:104px;z-index:10;background:#fff;min-width:76px;max-width:76px;text-align:left;padding:0 8px;font-weight:600;white-space:normal}
+table.grid th.cname{z-index:30;background:#eef2fb}
+table.grid td.cteam,table.grid th.cteam{position:sticky;left:36px;z-index:10;background:#fff;min-width:68px;max-width:68px;color:var(--txt2);font-size:12px}
+table.grid th.cteam{z-index:30;background:#eef2fb}
+table.grid td.cidx,table.grid th.cidx{position:sticky;left:0;z-index:10;background:#fff;min-width:36px;max-width:36px;color:var(--txt2)}
+table.grid th.cidx{z-index:30;background:#eef2fb}
+table.grid thead th.corner{z-index:40}
+table.grid td.cell{cursor:pointer;position:relative;font-weight:600}
+table.grid td.cell:active{outline:2px solid var(--blue) inset}
+table.grid td.cell.resigned{background:#f6f6f6!important;color:#c8c8c8!important;cursor:default;font-weight:400}
+table.grid td.cell .dot{position:absolute;top:2px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--red)}
+table.grid td.att{font-weight:700;background:#fafbff;position:sticky;right:0;z-index:10;min-width:42px}
+table.grid th.att{position:sticky;right:0;z-index:30;background:#eef2fb;min-width:42px}
+table.grid tfoot td{background:#fafafa;font-weight:600;position:relative}
+table.grid tfoot td.lab{position:sticky;left:0;text-align:left;padding-left:8px;font-weight:600;background:#f0f2f5;z-index:10;max-width:176px;overflow:hidden}
+table.grid tfoot td.bad{color:var(--red);font-weight:700}
+.pname-sub{display:block;font-size:10px;font-weight:400;color:var(--red)}
+.warn-box{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px}
+.empty{text-align:center;padding:40px 20px;color:var(--txt2)}
+.empty .btn{margin-top:12px}
+
+/* 弹层 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.mask.center{align-items:center}
+.sheet{background:#fff;width:100%;max-width:980px;border-radius:16px 16px 0 0;padding:16px;max-height:82vh;overflow:auto}
+.mask.center{align-items:flex-start;overflow-y:auto}
+.mask.center .sheet{border-radius:16px;max-width:480px;margin:16px auto;width:calc(100% - 32px)}
+/* 生成初稿弹层专用：配额永远 2 列，不随全局 grid4 变 4 列 */
+.gen-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 14px;margin:10px 0 4px}
+.gen-grid .field label{font-size:12px;line-height:1.3;word-break:break-all}
+.gen-grid .field input{width:100%;box-sizing:border-box}
+.gen-grid .field.last{grid-column:1/-1}
+/* 班次页配置区：自适应列数 */
+.shift-config{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px;margin-top:8px}
+.sheet-title{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.sheet-title .x{border:none;background:#f1f2f4;width:28px;height:28px;border-radius:50%;font-size:16px;color:#666}
+.shift-btns{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-bottom:12px}
+.shift-btns button{border:1.5px solid var(--line);border-radius:10px;padding:9px 4px;background:#fff;font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:2px}
+.shift-btns button small{font-weight:400;font-size:11px;opacity:.8}
+.shift-btns button.on{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.25)}
+.shift-btns button.clear{color:var(--red);border-color:#fecaca}
+
+/* 人员列表 */
+.person-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.person-item:last-child{border-bottom:none}
+.person-item .pinfo{flex:1;min-width:0}
+.person-item .pinfo .nm{font-weight:600}
+.person-item .pinfo .sub{font-size:12px;color:var(--txt2)}
+.person-item .ops{display:flex;gap:6px}
+.search{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:10px}
+
+/* 班次编辑 */
+.shift-row{display:grid;grid-template-columns:52px 1.2fr 1fr 1fr 42px 70px 34px;gap:6px;align-items:center;margin-bottom:6px}
+.shift-row.head{font-size:12px;color:var(--txt2)}
+.shift-row input,.shift-row select{border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%;min-width:0}
+.shift-row .swatch{width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.15);margin:auto;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.shift-row .del{border:none;background:none;color:var(--red);font-size:18px}
+.quota-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.quota-row .swatch{width:30px;height:30px;border-radius:8px;border:1px solid rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;font-weight:700}
+.quota-row input{width:70px;border:1px solid var(--line);border-radius:8px;padding:7px;text-align:center}
+.quota-row .nm{flex:1}
+
+.seg{display:flex;background:#e8ebf1;border-radius:10px;padding:3px;gap:3px;margin-bottom:12px}
+.seg button{flex:1;border:none;background:none;padding:9px;border-radius:8px;font-size:14px;color:var(--txt2)}
+.seg button.on{background:#fff;color:var(--blue);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);color:#fff;
+  padding:12px 20px;border-radius:10px;z-index:200;font-size:14px;max-width:80%;text-align:center}
+.month-item{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.month-item .nm{flex:1;font-weight:600}
+.help li{margin-bottom:6px;line-height:1.6}
+@media(min-width:760px){
+  .grid4{grid-template-columns:repeat(4,1fr)}
+  table.grid{font-size:14px}
+  table.grid th,table.grid td{min-width:38px;height:36px}
+}
+
+/* ============ 桌面端 Web 布局 ============ */
+.sidebar{display:none}
+@media(min-width:900px){
+  .sidebar{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:216px;
+    background:#fff;border-right:1px solid var(--line);z-index:60;padding-top:4px}
+  .sidebar .brand{font-size:18px;font-weight:800;padding:12px 20px 20px;color:var(--blue);
+    border-bottom:1px solid var(--line);margin-bottom:8px;letter-spacing:.5px}
+  .sidebar button{display:flex;align-items:center;gap:12px;width:100%;border:none;background:none;
+    padding:13px 20px;font-size:14px;color:var(--txt2);cursor:pointer;text-align:left;border-right:3px solid transparent}
+  .sidebar button .ic{font-size:17px;line-height:1;width:20px;text-align:center;font-weight:700}
+  .sidebar button.on{color:var(--blue);background:#eef2fb;font-weight:700;border-right-color:var(--blue)}
+  .tabbar{display:none}
+  #app{max-width:none;margin-left:216px;padding-bottom:24px}
+  .topbar .app-name{display:none}
+  .topbar{height:56px}
+  .view{padding:16px 20px}
+  .people-view{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  .people-view .card:last-child{grid-column:1/-1}
+  .more-view{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  .more-view .card:last-child{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 桌面端左侧导航 -->
+  <aside class="sidebar">
+    <div class="brand">物业排班系统</div>
+    <button :class="{on:tab==='sched'}" @click="tab='sched'"><span class="ic">排</span>排班</button>
+    <button :class="{on:tab==='people'}" @click="tab='people'"><span class="ic">人</span>人员</button>
+    <button :class="{on:tab==='shifts'}" @click="tab='shifts'"><span class="ic">班</span>班次</button>
+    <button :class="{on:tab==='more'}" @click="tab='more'"><span class="ic">更</span>更多</button>
+  </aside>
+
+  <header class="topbar">
+    <div class="app-name">物业排班系统</div>
+    <div class="month-picker">
+      <button @click="shiftMonth(-1)" title="上一月">‹</button>
+      <select v-model.number="year">
+        <option v-for="y in yearOpts" :value="y">{{y}}年</option>
+      </select>
+      <select v-model.number="month">
+        <option v-for="m in 12" :value="m">{{m}}月</option>
+      </select>
+      <button @click="shiftMonth(1)" title="下一月">›</button>
+    </div>
+  </header>
+
+  <!-- ============ 排班 ============ -->
+  <section v-show="tab==='sched'" class="view">
+    <div class="toolbar">
+      <button class="btn primary" @click="openGen">生成初稿</button>
+      <button class="btn" @click="exportSchedule">导出Excel</button>
+      <button class="btn" @click="triggerFile('fileSched')">导入排班</button>
+      <select v-model="teamFilter">
+        <option value="__all">全部班组</option>
+        <option v-for="t in teamList" :value="t">{{t}}</option>
+      </select>
+    </div>
+    <div class="warn-box" v-if="warnings.length">
+      <div v-for="(w,i) in warnings" :key="i">· {{w}}</div>
+    </div>
+    <div class="grid-wrap" v-if="visiblePeople.length">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="cidx corner">序号</th>
+            <th class="cteam corner">班组</th>
+            <th class="cname corner">姓名</th>
+            <th v-for="d in dim" :key="d" :class="{we:isWeekend(d)}">{{d}}<br><small>周{{weekday(d)}}</small></th>
+            <th class="att">出勤</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(p,i) in visiblePeople" :key="p.id">
+            <td class="cidx">{{i+1}}</td>
+            <td class="cteam">{{p.team}}</td>
+            <td class="cname">{{p.name}}<span class="pname-sub" v-if="p.leaveDate">离职 {{p.leaveDate}}</span></td>
+            <td v-for="d in dim" :key="d" class="cell"
+                :class="{resigned: !isActive(p,d)}"
+                :style="cellStyle(p,d)"
+                @click="openCell(p,d)">
+              {{cellText(p,d)}}<span class="dot" v-if="getCell(p.id,d).n"></span>
+            </td>
+            <td class="att">{{pStats(p.id).work}}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr v-for="sh in statRows" :key="'f'+sh.code">
+            <td class="lab" colspan="3">{{sh.code}} {{sh.name}}（{{sh.type==='work'?'出勤':sh.type==='rest'?'休息':'休假'}}）</td>
+            <td v-for="d in dim" :key="d" :class="{bad: sh.type==='work' && config.mode==='property' && config.quotas[sh.code] && dayStat(d,sh.code)!==config.quotas[sh.code]}">{{dayStat(d,sh.code)}}</td>
+            <td class="att">{{statTotal(sh.code)}}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="card empty" v-else>
+      <div>还没有排班数据</div>
+      <div class="muted" style="margin-top:6px">请先到「人员」页导入人员，或直接导入一份已有排班表</div>
+      <div class="row" style="justify-content:center;margin-top:12px">
+        <button class="btn primary" @click="tab='people'">去导入人员</button>
+        <button class="btn" @click="triggerFile('fileSched')">导入排班Excel</button>
+        <button class="btn" @click="loadDemo">载入示例体验</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 人员 ============ -->
+  <section v-show="tab==='people'" class="view people-view">
+    <div class="card">
+      <h3>添加人员</h3>
+      <div class="grid4">
+        <div class="field"><label>姓名 *</label><input v-model="form.name" placeholder="如 庞晓璇"></div>
+        <div class="field"><label>工号/ID</label><input v-model="form.empId" placeholder="如 21602787"></div>
+        <div class="field"><label>班组/部门</label><input v-model="form.team" list="teamListDL" placeholder="如 秩序一班"></div>
+        <div class="field"><label>离职日期（可不填）</label><input type="date" v-model="form.leaveDate"></div>
+      </div>
+      <datalist id="teamListDL"><option v-for="t in teamList" :value="t"></option></datalist>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" @click="addPerson">＋ 添加</button>
+        <button class="btn" @click="resetForm">清空</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>快速导入</h3>
+      <div class="muted" style="margin-bottom:8px">支持 Excel（.xlsx/.xls/.csv），自动识别「姓名/工号/班组」列；也可以从 Excel 复制整列直接粘贴到下方。</div>
+      <div class="row">
+        <button class="btn primary sm" @click="triggerFile('filePeople')">选择文件导入</button>
+        <button class="btn sm" @click="downloadTemplate">下载导入模板</button>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label>粘贴区（从 Excel 复制后粘贴，每行一人，可含工号、班组）</label>
+        <textarea v-model="pasteText" placeholder="庞晓璇&#9;21602787&#9;秩序一班&#10;牟方鹏&#9;21667512&#9;秩序一班"></textarea>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" @click="importPasted">解析粘贴内容</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>人员列表（{{people.length}}人）</h3>
+      <input class="search" v-model="searchKey" placeholder="搜索姓名 / 工号 / 班组">
+      <div v-if="!filteredPeople.length" class="muted">无匹配人员</div>
+      <div class="person-item" v-for="p in filteredPeople" :key="p.id">
+        <div class="pinfo">
+          <div class="nm">
+            {{p.name}}
+            <span class="tag gray" v-if="p.team">{{p.team}}</span>
+            <span class="tag red" v-if="p.leaveDate">已离职 {{p.leaveDate}}</span>
+          </div>
+          <div class="sub">工号：{{p.empId || '—'}}</div>
+        </div>
+        <div class="ops">
+          <button class="btn sm" @click="editPerson(p)">编辑</button>
+          <button class="btn sm danger" @click="removePerson(p)">删除</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 班次设置 ============ -->
+  <section v-show="tab==='shifts'" class="view">
+    <div class="card">
+      <h3>班制模式</h3>
+      <div class="seg">
+        <button :class="{on:config.mode==='simple'}" @click="switchMode('simple')">简单班制（上 / 休）</button>
+        <button :class="{on:config.mode==='property'}" @click="switchMode('property')">物业多班次（K/J/H…）</button>
+      </div>
+      <div class="shift-config">
+        <div class="field"><label>部门/项目名称（用于导出标题）</label><input v-model="config.deptName" placeholder="如 PA MALL 安保部"></div>
+        <div class="field"><label>每人每月休息天数（简单班制用；物业班制按定岗人数自动反推）</label><input type="number" min="0" max="15" v-model.number="config.restDays"></div>
+        <div class="field"><label>最多连续上班天数</label><input type="number" min="2" max="15" v-model.number="config.maxStreak"></div>
+      </div>
+    </div>
+
+    <div class="card" v-if="config.mode==='property'">
+      <h3>每日定岗人数（生成初稿时按此配额排）</h3>
+      <div class="quota-row" v-for="sh in workShifts" :key="'q'+sh.code">
+        <div class="swatch" :style="swatchStyle(sh)">{{sh.code}}</div>
+        <div class="nm">{{sh.name}}<div class="muted">{{timeText(sh)}}</div></div>
+        <input type="number" min="0" v-model.number="config.quotas[sh.code]"> 人/天
+      </div>
+      <div class="muted">提示：每天在岗人数 = 各岗位人数之和；系统会按在岗人数自动安排休息，人数对不上时会在排班页提示。</div>
+    </div>
+
+    <div class="card">
+      <h3>班次定义</h3>
+      <div class="shift-row head">
+        <div>代码</div><div>名称</div><div>开始</div><div>结束</div><div>颜色</div><div>类型</div><div></div>
+      </div>
+      <div class="shift-row" v-for="(sh,i) in config.shifts" :key="i">
+        <input v-model="sh.code" placeholder="K">
+        <input v-model="sh.name" placeholder="K班（4+A）">
+        <input type="time" v-model="sh.start">
+        <input type="time" v-model="sh.end">
+        <input type="color" :value="sh.color" @input="setColor(sh,$event)" style="width:34px;height:28px;border:1px solid var(--line);border-radius:6px;padding:1px;background:#fff">
+        <select v-model="sh.type">
+          <option value="work">出勤</option>
+          <option value="rest">休息</option>
+          <option value="leave">休假</option>
+        </select>
+        <button class="del" @click="config.shifts.splice(i,1)">×</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" @click="addShift">＋ 新增班次</button>
+        <button class="btn sm" @click="applyPreset(config.mode)" style="margin-left:auto">恢复当前班制默认班次</button>
+      </div>
+      <div class="muted" style="margin-top:8px">类型说明：「出勤」计入上班天数并参与定岗；「休息」如 O 班；「休假」如年假/事假/病假，不计出勤。</div>
+    </div>
+  </section>
+
+  <!-- ============ 更多/数据 ============ -->
+  <section v-show="tab==='more'" class="view more-view">
+    <div class="card">
+      <h3>排班数据</h3>
+      <div class="row">
+        <button class="btn primary" @click="exportSchedule">导出本月排班 Excel</button>
+        <button class="btn" @click="triggerFile('fileSched')">导入排班表 Excel</button>
+      </div>
+      <div class="muted" style="margin-top:6px">导出格式与物业现有排班表一致：含日期/星期、班次颜色、每日各班次人数统计、出勤天数和说明栏；「排班」页选了具体班组时只导出该班组。</div>
+    </div>
+    <div class="card">
+      <h3>人员数据</h3>
+      <div class="row">
+        <button class="btn" @click="downloadTemplate">下载人员导入模板</button>
+        <button class="btn" @click="exportPeople">导出当前人员 Excel</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>备份与恢复</h3>
+      <div class="row">
+        <button class="btn" @click="exportBackup">导出全部数据（JSON备份）</button>
+        <button class="btn" @click="triggerFile('fileBackup')">导入备份</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>重置与清空</h3>
+      <button class="btn danger" @click="resetAll">一键清除本地数据（恢复默认状态）</button>
+      <div class="muted" style="margin-top:6px">将清空全部人员、班次设置和所有月份的排班数据，恢复初始状态。此操作不可恢复，建议先「导出全部数据」备份。</div>
+    </div>
+    <div class="card">
+      <h3>已保存的月份（{{Object.keys(scheds).length}}）</h3>
+      <div class="month-item" v-for="key in Object.keys(scheds).sort()" :key="key">
+        <div class="nm">{{key.replace('-','年')}}月</div>
+        <span class="muted">{{cellCount(key)}} 个排班格子</span>
+        <button class="btn sm danger" @click="delMonth(key)">删除</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>使用说明</h3>
+      <ul class="help muted" style="padding-left:18px">
+        <li>①「人员」页：用 Excel 文件或粘贴方式快速导入人员，离职人员填离职日期，之后日期不再排班。</li>
+        <li>②「班次」页：简单部门选「上/休」班制；物业选多班次并设置每天各岗位人数。</li>
+        <li>③ 回到「排班」页点「生成初稿」，系统自动轮转排好整月，再点格子即可调班、请假、加批注。</li>
+        <li>④ 调整完点「导出Excel」发群/打印；年假 Y 绿色、事假病假红色、休息 O，与现表一致。</li>
+        <li>数据保存在本机浏览器中，换电脑请用「JSON备份」迁移。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 底部导航 -->
+  <nav class="tabbar">
+    <button :class="{on:tab==='sched'}" @click="tab='sched'"><span class="ic">排</span>排班</button>
+    <button :class="{on:tab==='people'}" @click="tab='people'"><span class="ic">人</span>人员</button>
+    <button :class="{on:tab==='shifts'}" @click="tab='shifts'"><span class="ic">班</span>班次</button>
+    <button :class="{on:tab==='more'}" @click="tab='more'"><span class="ic">更</span>更多</button>
+  </nav>
+
+  <!-- 单元格编辑弹层 -->
+  <div class="mask" v-if="cellEdit.open" @click.self="cellEdit.open=false">
+    <div class="sheet">
+      <div class="sheet-title">
+        {{cellEdit.p.name}} · {{month}}月{{cellEdit.day}}日（周{{weekday(cellEdit.day)}}）
+        <button class="x" @click="cellEdit.open=false">×</button>
+      </div>
+      <div class="shift-btns">
+        <button v-for="sh in config.shifts" :key="sh.code"
+                :class="{on:cellEdit.code===sh.code}" :style="btnStyle(sh)"
+                @click="pickShift(sh.code)">
+          {{sh.code}}<small>{{sh.name}}</small>
+        </button>
+        <button class="clear" @click="pickShift('')">清空</button>
+      </div>
+      <div class="field">
+        <label>批注/备注（导出时写入 Excel 批注，如：8月5日--8月7日年假共3天）</label>
+        <textarea v-model="cellEdit.note"></textarea>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="muted">连续填充：把本次选择从 {{cellEdit.day}} 日填到</span>
+        <input type="number" min="1" :max="dim" v-model.number="cellEdit.fillEnd" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px;text-align:center">
+        <span class="muted">日</span>
+        <button class="btn sm primary" @click="applyRange">填充</button>
+      </div>
+      <button class="btn primary block" style="margin-top:14px" @click="cellEdit.open=false">完成</button>
+    </div>
+  </div>
+
+  <!-- 生成初稿弹层 -->
+  <div class="mask center" v-if="gen.open" @click.self="gen.open=false">
+    <div class="sheet">
+      <div class="sheet-title">生成 {{year}}年{{month}}月 排班初稿<button class="x" @click="gen.open=false">×</button></div>
+      <div class="muted" style="margin-bottom:10px">
+        模板：{{config.mode==='simple' ? '简单班制（上班/休息轮转）' : '物业多班次（按每日定岗人数轮转）'}}；
+        本月共 <b>{{dim}}</b> 天，参与排班 <b>{{activePeopleCount}}</b> 人。
+      </div>
+      <div class="gen-grid" v-if="config.mode==='property'">
+        <div class="field" v-for="(sh,i) in workShifts" :key="'gq'+sh.code">
+          <label>{{sh.code}} {{sh.name}} 人数/天</label>
+          <input type="number" min="0" v-model.number="gen.quotas[sh.code]">
+        </div>
+        <div class="field"><label>最多连续上班</label><input type="number" min="2" v-model.number="gen.maxStreak"></div>
+        <div class="field last"><label>休息安排</label><input value="按定岗自动反推" disabled></div>
+      </div>
+      <div class="gen-grid" v-else>
+        <div class="field"><label>每人休息天数</label><input type="number" min="0" v-model.number="gen.restDays"></div>
+        <div class="field"><label>最多连上班数</label><input type="number" min="2" v-model.number="gen.maxStreak"></div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin:12px 0">
+        <input type="checkbox" v-model="gen.keepLeave"> 保留已标记的休假/批注（年假、事假、病假不覆盖）
+      </label>
+      <div class="warn-box" v-if="genWarn">⚠ {{genWarn}}</div>
+      <button class="btn primary block" @click="doGenerate">生成初稿（覆盖本月）</button>
+    </div>
+  </div>
+
+  <input type="file" id="filePeople" accept=".xlsx,.xls,.csv" style="display:none" @change="onFilePeople">
+  <input type="file" id="fileSched" accept=".xlsx,.xls,.csv" style="display:none" @change="onFileSched">
+  <input type="file" id="fileBackup" accept=".json" style="display:none" @change="onFileBackup">
+  <div class="toast" v-if="toast">{{toast}}</div>
+</div>
+
+<script>
+const { createApp, reactive, computed, watch, toRefs } = Vue;
+
+/* ---------- 预设班次 ---------- */
+const PRESET_PROPERTY = [
+  {code:'K', name:'K班（4+A）', start:'19:30', end:'08:00', color:'#FFF3CD', textColor:'#8A6D00', type:'work'},
+  {code:'J', name:'J班（B+4）', start:'08:00', end:'20:00', color:'#FFF3CD', textColor:'#8A6D00', type:'work'},
+  {code:'H', name:'H班（2+L）', start:'10:00', end:'22:00', color:'#D1ECF1', textColor:'#0C5460', type:'work'},
+  {code:'B', name:'B班',       start:'08:00', end:'16:00', color:'#E2E3E5', textColor:'#383D41', type:'work'},
+  {code:'D', name:'D班',       start:'09:00', end:'18:00', color:'#E2E3E5', textColor:'#383D41', type:'work'},
+  {code:'O', name:'休息',      start:'', end:'', color:'#F4F4F5', textColor:'#9CA3AF', type:'rest'},
+  {code:'Y', name:'年假',      start:'', end:'', color:'#D4EDDA', textColor:'#155724', type:'leave'},
+  {code:'事', name:'事假',     start:'', end:'', color:'#F8D7DA', textColor:'#842029', type:'leave'},
+  {code:'病', name:'病假',     start:'', end:'', color:'#F8D7DA', textColor:'#842029', type:'leave'}
+];
+const PRESET_SIMPLE = [
+  {code:'上', name:'上班', start:'', end:'', color:'#D1ECF1', textColor:'#0C5460', type:'work'},
+  {code:'休', name:'休息', start:'', end:'', color:'#F4F4F5', textColor:'#9CA3AF', type:'rest'},
+  {code:'Y', name:'年假', start:'', end:'', color:'#D4EDDA', textColor:'#155724', type:'leave'},
+  {code:'事', name:'事假', start:'', end:'', color:'#F8D7DA', textColor:'#842029', type:'leave'},
+  {code:'病', name:'病假', start:'', end:'', color:'#F8D7DA', textColor:'#842029', type:'leave'}
+];
+const AUTO_COLORS = ['#D1ECF1','#D4EDDA','#FFE8CC','#E0E7FF','#FCE7F3','#FEF9C3'];
+
+const STORE_KEY = 'pa_scheduler_v2';
+const clone = o => JSON.parse(JSON.stringify(o));
+const pad = n => String(n).padStart(2,'0');
+const dimOf = (y,m) => new Date(y, m, 0).getDate();
+
+function defaultState(){
+  const now = new Date();
+  return {
+    tab:'sched',
+    year: now.getFullYear(),
+    month: now.getMonth()+1,
+    teamFilter:'__all',
+    config:{
+      deptName:'PA MALL 安保部',
+      mode:'property',
+      restDays:4, maxStreak:7,
+      shifts: clone(PRESET_PROPERTY),
+      quotas:{ K:5, J:10, H:3 }
+    },
+    people:[],
+    scheds:{},
+    form:{name:'',empId:'',team:'',leaveDate:''},
+    searchKey:'',
+    pasteText:'',
+    cellEdit:{open:false,pid:'',day:1,code:'',note:'',fillEnd:1,p:null},
+    gen:{open:false,quotas:{},restDays:4,maxStreak:7,keepLeave:true},
+    toast:''
+  };
+}
+
+const S = reactive(loadState());
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){
+      const d = JSON.parse(raw);
+      const st = defaultState();
+      return Object.assign(st, d, {tab:'sched', cellEdit:st.cellEdit, gen:st.gen, toast:'', form:st.form, searchKey:'', pasteText:''});
+    }
+  }catch(e){ console.warn(e); }
+  return defaultState();
+}
+let saveTimer=null;
+watch(S, ()=>{
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify({config:S.config, people:S.people, scheds:S.scheds, year:S.year, month:S.month})); }catch(e){}
+  }, 300);
+}, {deep:true});
+
+let toastTimer=null;
+function showToast(msg){
+  S.toast = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>S.toast='', 2200);
+}
+
+/* ---------- 基础计算 ---------- */
+const schedKey = computed(()=>`${S.year}-${S.month}`);
+const sched = computed(()=>{
+  const k = schedKey.value;
+  if(!S.scheds[k]) S.scheds[k] = {cells:{}};
+  return S.scheds[k];
+});
+const dim = computed(()=>dimOf(S.year, S.month));
+const yearOpts = computed(()=>{ const a=[]; for(let y=S.year-3;y<=S.year+3;y++) a.push(y); return a; });
+const workShifts = computed(()=>S.config.shifts.filter(s=>s.type==='work'));
+const restShift = computed(()=>S.config.shifts.find(s=>s.type==='rest') || S.config.shifts[0]);
+const statRows = computed(()=>{
+  const ws = S.config.shifts.filter(s=>s.type==='work');
+  const rs = S.config.shifts.filter(s=>s.type!=='work');
+  return ws.concat(rs);
+});
+const teamList = computed(()=>{
+  const m = new Map();
+  S.people.forEach(p=>{ if(p.team && !m.has(p.team)) m.set(p.team,1); });
+  return [...m.keys()];
+});
+const orderedPeople = computed(()=>{
+  const teamOrder = new Map();
+  S.people.forEach((p,i)=>{ if(!teamOrder.has(p.team||'')) teamOrder.set(p.team||'', teamOrder.size); });
+  return [...S.people].map((p,i)=>({p,i}))
+    .sort((a,b)=> (teamOrder.get(a.p.team||'')-teamOrder.get(b.p.team||'')) || a.i-b.i)
+    .map(x=>x.p);
+});
+const visiblePeople = computed(()=> S.teamFilter==='__all' ? orderedPeople.value : orderedPeople.value.filter(p=>p.team===S.teamFilter));
+const activePeopleCount = computed(()=> orderedPeople.value.filter(p=>isActive(p,1)||leaveDay(p)).length);
+
+function weekday(d){ return '日一二三四五六'[new Date(S.year, S.month-1, d).getDay()]; }
+function isWeekend(d){ const w = new Date(S.year, S.month-1, d).getDay(); return w===0||w===6; }
+function shiftByCode(code){ return S.config.shifts.find(s=>s.code===code); }
+function leaveDay(p){
+  if(!p.leaveDate) return null;           // 无离职日期：全勤
+  const [y,m,d] = p.leaveDate.split('-').map(Number);
+  if(y<S.year || (y===S.year && m<S.month)) return 0;    // 本月之前已离职
+  if(y>S.year || (y===S.year && m>S.month)) return 99;   // 未来才离职：本月全勤
+  return d;                                // 本月内某日离职
+}
+function isActive(p,d){ const ld = leaveDay(p); return (ld===null || ld===99) ? true : d<=ld; }
+function getCell(pid,day){
+  const row = sched.value.cells[pid];
+  return (row && row[day]) || {s:'',n:''};
+}
+function cellText(p,d){
+  if(!isActive(p,d)) return '';
+  return getCell(p.id,d).s || '';
+}
+function cellStyle(p,d){
+  if(!isActive(p,d)) return {};
+  const c = getCell(p.id,d).s;
+  const sh = shiftByCode(c);
+  if(!sh) return {};
+  return {background:sh.color, color:sh.textColor||'#333'};
+}
+function swatchStyle(sh){ return {background:sh.color||'#eee', color:sh.textColor||'#333'}; }
+function btnStyle(sh){ return {background:sh.color||'#fff', color:sh.textColor||'#333', borderColor:(sh.color||'#eee')}; }
+function timeText(sh){ return sh.start ? `${sh.start} - ${sh.end||''}` : '不计时段'; }
+
+function pStats(pid){
+  const r = {work:0, rest:0, leave:0};
+  for(let d=1; d<=dim.value; d++){
+    const c = getCell(pid,d).s;
+    const sh = shiftByCode(c);
+    if(!sh) continue;
+    if(sh.type==='work') r.work++;
+    else if(sh.type==='rest') r.rest++;
+    else r.leave++;
+  }
+  return r;
+}
+function dayStat(d,code){
+  let n=0;
+  visiblePeople.value.forEach(p=>{ if(isActive(p,d) && getCell(p.id,d).s===code) n++; });
+  return n;
+}
+function statTotal(code){
+  let n=0;
+  visiblePeople.value.forEach(p=>{
+    for(let d=1;d<=dim.value;d++){ if(isActive(p,d) && getCell(p.id,d).s===code) n++; }
+  });
+  return n;
+}
+const warnings = computed(()=>{
+  const w=[];
+  if(!S.people.length) return w;
+  if(S.config.mode==='property'){
+    const qsum = workShifts.value.reduce((a,s)=>a+(Number(S.config.quotas[s.code])||0),0);
+    const bad=[];
+    for(let d=1;d<=dim.value;d++){
+      const working = orderedPeople.value.filter(p=>isActive(p,d)).length
+        - orderedPeople.value.filter(p=>isActive(p,d) && ['rest','leave'].includes((shiftByCode(getCell(p.id,d).s)||{}).type)).length;
+      if(Math.abs(working-qsum)>0 && working>=0) bad.push(d);
+    }
+    if(bad.length) w.push(`有 ${bad.length} 天在岗人数与定岗总人数（${qsum}人）不一致：第 ${bad.slice(0,8).join('、')}${bad.length>8?'…':''} 天，可手动调整或重新生成。`);
+  }
+  orderedPeople.value.forEach(p=>{
+    const st = pStats(p.id);
+    if(isActive(p,dim.value) && st.work+st.rest+st.leave===0) w.push(`「${p.name}」本月还没有任何排班。`);
+  });
+  return w.slice(0,6);
+});
+
+/* ---------- 月份切换 ---------- */
+function shiftMonth(delta){
+  let m = S.month + delta, y = S.year;
+  if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  S.month=m; S.year=y;
+}
+
+/* ---------- 人员 ---------- */
+function resetForm(){ S.form={name:'',empId:'',team:'',leaveDate:''}; }
+function addPerson(){
+  if(!S.form.name.trim()){ showToast('请填写姓名'); return; }
+  S.people.push({id:'p'+Date.now()+Math.floor(Math.random()*1000),
+    name:S.form.name.trim(), empId:S.form.empId.trim(), team:S.form.team.trim(), leaveDate:S.form.leaveDate||''});
+  resetForm();
+  showToast('已添加');
+}
+function editPerson(p){
+  const name = prompt('姓名', p.name); if(name===null) return;
+  const empId = prompt('工号/ID', p.empId||''); if(empId===null) return;
+  const team = prompt('班组/部门', p.team||''); if(team===null) return;
+  const leaveDate = prompt('离职日期（格式 2026-08-03，在职留空）', p.leaveDate||''); if(leaveDate===null) return;
+  p.name=name.trim(); p.empId=empId.trim(); p.team=team.trim(); p.leaveDate=leaveDate.trim();
+}
+function removePerson(p){
+  if(!confirm(`确定删除人员「${p.name}」？其历史排班格子也会清除。`)) return;
+  S.people = S.people.filter(x=>x.id!==p.id);
+  Object.values(S.scheds).forEach(sc=>{ delete sc.cells[p.id]; });
+}
+const filteredPeople = computed(()=>{
+  const k = S.searchKey.trim();
+  if(!k) return orderedPeople.value;
+  return orderedPeople.value.filter(p=> (p.name||'').includes(k)||(p.empId||'').includes(k)||(p.team||'').includes(k));
+});
+function upsertPerson(name, empId, team, leaveDate){
+  name = (name||'').trim();
+  if(!name) return false;
+  empId=(empId||'').trim(); team=(team||'').trim(); leaveDate=(leaveDate||'').trim();
+  // 以姓名为主键匹配；工号相同但姓名不同视为工号笔误，不覆盖他人
+  let p = S.people.find(x=>x.name===name);
+  if(!p && empId) p = S.people.find(x=>x.empId===empId && x.name===name);
+  if(p){
+    if(empId && !p.empId) p.empId=empId;
+    if(team) p.team=team;
+    if(leaveDate) p.leaveDate=leaveDate;
+    return 'update';
+  }
+  S.people.push({id:'p'+Date.now()+Math.floor(Math.random()*10000), name, empId, team, leaveDate});
+  return 'add';
+}
+
+/* ---------- 文件导入：人员 ---------- */
+function triggerFile(id){ document.getElementById(id).click(); }
+function readFile(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result);
+    r.onerror=rej;
+    if(file.name.match(/\.csv$/i)) r.readAsText(file,'utf-8');
+    else r.readAsArrayBuffer(file);
+  });
+}
+async function onFilePeople(e){
+  const f = e.target.files[0]; e.target.value='';
+  if(!f) return;
+  try{
+    const data = await readFile(f);
+    let rows;
+    if(f.name.match(/\.csv$/i)){
+      const wb = XLSX.read(data, {type:'string'});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+    } else {
+      const wb = XLSX.read(data, {type:'array'});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+    }
+    const res = importPeopleRows(rows);
+    showToast(`导入完成：新增 ${res.add} 人，更新 ${res.update} 人`);
+  }catch(err){ showToast('导入失败：'+err.message); }
+}
+function findCol(rows, headerRowIdx, regs){
+  for(let r=Math.max(0,headerRowIdx-2); r<=Math.min(rows.length-1,headerRowIdx+2); r++){
+    const row = rows[r]||[];
+    for(let c=0;c<Math.min(row.length,12);c++){
+      const v = String(row[c]||'').replace(/\s/g,'');
+      if(regs.some(re=>re.test(v))) return c;
+    }
+  }
+  return -1;
+}
+function importPeopleRows(rows){
+  let add=0, update=0;
+  const hr = rows.findIndex(r=> r.some(c=>/姓名|名字|员工姓名/.test(String(c))));
+  let nameCol=-1, empCol=-1, teamCol=-1, leaveCol=-1;
+  if(hr>=0){
+    const row = rows[hr];
+    row.forEach((c,i)=>{
+      const v=String(c||'').replace(/\s/g,'');
+      if(/姓名|名字/.test(v)) nameCol=i;
+      if(/工号|ID号|^ID$|员工编号|编号/.test(v)) empCol=i;
+      if(/班组|部门|组别|小组|团队/.test(v)) teamCol=i;
+      if(/离职|到期/.test(v)) leaveCol=i;
+    });
+  }
+  let teamCarry='';
+  rows.forEach((row,ri)=>{
+    if(hr>=0 && ri<=hr) return;
+    const cells = (row||[]).map(c=>String(c??'').trim());
+    if(!cells.some(x=>x)) return;
+    let name, emp, team, leave;
+    if(nameCol>=0){
+      name = cells[nameCol];
+      emp = empCol>=0?cells[empCol]:'';
+      team = teamCol>=0?cells[teamCol]:'';
+      if(team) teamCarry=team; else team=teamCarry;
+      leave = leaveCol>=0?cells[leaveCol]:'';
+    } else {
+      // 无表头：数字长串=工号，含 班/组/部=班组，其余第一个非空=姓名
+      const rest = cells.filter(x=>x);
+      emp = rest.find(x=>/^\d{4,}$/.test(x))||'';
+      team = rest.find(x=>/班|组|部|科/.test(x))||'';
+      name = rest.find(x=>x!==emp && x!==team)||'';
+    }
+    if(!name || /班（|班\(|特别说明|制表|审核|审批|序号|姓名/.test(name)) return;
+    let ld='';
+    if(leave){
+      const m = String(leave).match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+      if(m) ld=`${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+    }
+    const r = upsertPerson(name, emp, team, ld);
+    if(r==='add') add++; else if(r==='update') update++;
+  });
+  return {add,update};
+}
+function importPasted(){
+  if(!S.pasteText.trim()){ showToast('粘贴区是空的'); return; }
+  const lines = S.pasteText.split(/\r?\n/).filter(l=>l.trim());
+  const rows = lines.map(l=> l.split(/\t|,|，/).map(x=>x.trim()));
+  const res = importPeopleRows(rows);
+  showToast(`解析完成：新增 ${res.add} 人，更新 ${res.update} 人`);
+  S.pasteText='';
+}
+function downloadTemplate(){
+  const data = [
+    ['序号','班组','工号','姓名','离职日期(可不填)'],
+    [1,'秩序一班','21602787','庞晓璇',''],
+    [2,'秩序一班','21667512','牟方鹏',''],
+    [3,'秩序二班','21585195','李湘南',''],
+    ['','','','示例：离职人员填 2026-08-03','2026-08-03']
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, '人员导入模板');
+  XLSX.writeFile(wb, '排班人员导入模板.xlsx');
+}
+function exportPeople(){
+  const data = [['序号','班组','工号','姓名','离职日期']];
+  orderedPeople.value.forEach((p,i)=> data.push([i+1, p.team||'', p.empId||'', p.name, p.leaveDate||'']));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), '人员名单');
+  XLSX.writeFile(wb, `人员名单_${S.year}年${S.month}月.xlsx`);
+}
+
+/* ---------- 班次设置 ---------- */
+function switchMode(mode){
+  if(S.config.mode===mode) return;
+  if(!confirm(`切换到「${mode==='simple'?'简单班制（上/休）':'物业多班次'}」？班次定义将替换为对应预设（配额也会重置）。`)) return;
+  S.config.mode = mode;
+  applyPreset(mode);
+}
+function applyPreset(mode){
+  S.config.shifts = clone(mode==='simple'?PRESET_SIMPLE:PRESET_PROPERTY);
+  if(mode==='property') S.config.quotas = {K:5,J:10,H:3};
+  else S.config.quotas = {};
+  showToast('已恢复默认班次');
+}
+function addShift(){
+  S.config.shifts.push({code:'', name:'新班次', start:'', end:'',
+    color:AUTO_COLORS[S.config.shifts.length%AUTO_COLORS.length], textColor:'#333', type:'work'});
+}
+
+/* ---------- 生成初稿 ---------- */
+function openGen(){
+  if(!S.people.length){ showToast('请先在「人员」页导入人员'); S.tab='people'; return; }
+  S.gen.quotas = {};
+  workShifts.value.forEach(sh=> S.gen.quotas[sh.code] = Number(S.config.quotas[sh.code])||0);
+  S.gen.restDays = S.config.restDays;
+  S.gen.maxStreak = S.config.maxStreak;
+  S.gen.keepLeave = true;
+  S.gen.open = true;
+}
+const genWarn = computed(()=>{
+  if(S.config.mode!=='property') return '';
+  const qsum = workShifts.value.reduce((a,s)=>a+(Number(S.gen.quotas[s.code])||0),0);
+  const active = orderedPeople.value.filter(p=>isActive(p,1)).length;
+  if(qsum===0) return '还没有设置任何岗位人数，请在「班次」页或上方填写。';
+  const restAvg = (active - qsum);
+  if(restAvg<0) return `每天需上岗 ${qsum} 人，但当前只有 ${active} 人，人数不足，请减少岗位人数。`;
+  return `按当前配额，每天约 ${restAvg} 人休息，人均月休约 ${Math.round(restAvg*dim.value/active*10)/10} 天。`;
+});
+function doGenerate(){
+  const dimN = dim.value;
+  const people = orderedPeople.value;
+  const shifts = S.config.shifts;
+  const wShifts = shifts.filter(s=>s.type==='work');
+  const rShift = shifts.find(s=>s.type==='rest');
+  const leaveCodes = new Set(shifts.filter(s=>s.type==='leave').map(s=>s.code));
+  const restDays = Math.max(0, Number(S.gen.restDays)||0);
+  const maxStreak = Math.max(2, Number(S.gen.maxStreak)||7);
+  const quotas = {};
+  wShifts.forEach(s=> quotas[s.code] = Math.max(0, Number(S.gen.quotas[s.code])||0));
+
+  // 保存配置
+  S.config.restDays = restDays; S.config.maxStreak = maxStreak;
+  wShifts.forEach(s=> S.config.quotas[s.code] = quotas[s.code]);
+
+  const oldCells = sched.value.cells;
+  const cells = {};
+  const ensure = pid => cells[pid] || (cells[pid]={});
+
+  // 保留休假格子
+  if(S.gen.keepLeave){
+    people.forEach(p=>{
+      const old = oldCells[p.id]; if(!old) return;
+      Object.entries(old).forEach(([d,c])=>{
+        if(c && leaveCodes.has(c.s)){ ensure(p.id)[d] = {s:c.s, n:c.n||''}; }
+      });
+    });
+  }
+  const isLeave = (p,d)=>{ const c=cells[p.id]&&cells[p.id][d]; return c && leaveCodes.has(c.s); };
+
+  // ---- 第一步：安排休息日 ----
+  // 物业模式：每天休息人数 = 当天在岗人数 - 定岗总人数（配额反推）
+  // 简单模式：按人均月休天数平摊
+  const quotaSum = Object.values(quotas).reduce((a,b)=>a+b,0);
+  const target = new Map(), restsTaken = new Map(), streak = new Map();
+  people.forEach(p=>{
+    let activeDays=0;
+    for(let d=1;d<=dimN;d++) if(isActive(p,d)) activeDays++;
+    target.set(p.id, Math.round(restDays * activeDays/dimN));
+    restsTaken.set(p.id,0); streak.set(p.id,0);
+  });
+  for(let d=1;d<=dimN;d++){
+    const candsAll = people.filter(p=> isActive(p,d) && !isLeave(p,d) && !(cells[p.id]&&cells[p.id][d]));
+    const leaveToday = people.filter(p=> isActive(p,d) && isLeave(p,d)).length;
+    let pickN;
+    if(S.config.mode==='property'){
+      pickN = Math.max(0, candsAll.length - quotaSum);
+      // 休假格子当天不上班，也要从上岗名额里扣掉
+      pickN = Math.max(0, people.filter(p=>isActive(p,d)).length - leaveToday - quotaSum);
+    } else {
+      let need=0;
+      candsAll.forEach(p=>{ if(restsTaken.get(p.id) < target.get(p.id)) need += target.get(p.id)-restsTaken.get(p.id); });
+      pickN = Math.round(need/(dimN-d+1));
+    }
+    // 强制休息：连续上班达上限
+    const forced = candsAll.filter(p=> streak.get(p.id)>=maxStreak);
+    if(forced.length>pickN) pickN = forced.length;
+    const cands = candsAll.filter(p=>
+      S.config.mode==='property' || restsTaken.get(p.id) < target.get(p.id));
+    cands.sort((a,b)=>{
+      const fa = forced.includes(a)?1:0, fb = forced.includes(b)?1:0;
+      if(fb!==fa) return fb-fa;
+      const sd = streak.get(b.id)-streak.get(a.id);
+      if(sd) return sd;
+      const rt = restsTaken.get(a.id)-restsTaken.get(b.id);
+      if(rt) return rt;
+      return Math.random()-0.5;
+    });
+    const resting = new Set(cands.slice(0,pickN).map(p=>p.id));
+    people.forEach(p=>{
+      if(!isActive(p,d)) return;
+      if(resting.has(p.id)){
+        ensure(p.id)[d] = {s:rShift?rShift.code:'', n:''};
+        restsTaken.set(p.id, restsTaken.get(p.id)+1);
+        streak.set(p.id,0);
+      } else if(isLeave(p,d)){
+        streak.set(p.id,0);
+      } else {
+        streak.set(p.id, streak.get(p.id)+1);
+      }
+    });
+  }
+
+  // ---- 第二步：安排出勤班次（定岗配额 + 连续同岗优先） ----
+  const cnt = {}; // pid -> {code: n}
+  people.forEach(p=> cnt[p.id]={});
+  for(let d=1;d<=dimN;d++){
+    let workers = people.filter(p=> isActive(p,d) && !isLeave(p,d) &&
+      !(cells[p.id]&&cells[p.id][d] && (cells[p.id][d].s===(rShift&&rShift.code))));
+    // 计算当日配额
+    let q = {};
+    if(S.config.mode==='simple'){
+      if(wShifts[0]) q[wShifts[0].code] = workers.length;
+    } else {
+      wShifts.forEach(s=> q[s.code]=quotas[s.code]||0);
+    }
+    let qsum = Object.values(q).reduce((a,b)=>a+b,0);
+    if(qsum>0 && workers.length>qsum){
+      // 人多：加到配额最大的岗位
+      const maxCode = Object.keys(q).sort((a,b)=>q[b]-q[a])[0];
+      q[maxCode] += workers.length-qsum; qsum = workers.length;
+    } else if(qsum>workers.length){
+      // 人少：从配额最大的岗位往下减
+      let over = qsum-workers.length;
+      const order = Object.keys(q).sort((a,b)=>q[b]-q[a]);
+      for(const c of order){
+        const cut = Math.min(q[c], over);
+        q[c]-=cut; over-=cut; if(!over) break;
+      }
+    }
+    const assigned = new Set();
+    const order = wShifts.slice().sort((a,b)=>(q[b.code]||0)-(q[a.code]||0));
+    for(const sh of order){
+      const n = q[sh.code]||0; if(!n) continue;
+      const pool = workers.filter(p=>!assigned.has(p.id));
+      pool.forEach(p=>{
+        const yc = d>1 && cells[p.id] && cells[p.id][d-1] ? cells[p.id][d-1].s : '';
+        p._score = (yc===sh.code?1000:0) - (cnt[p.id][sh.code]||0)*10 + Math.random();
+      });
+      pool.sort((a,b)=>b._score-a._score);
+      pool.slice(0,n).forEach(p=>{
+        ensure(p.id)[d] = {s:sh.code, n:''};
+        assigned.add(p.id);
+        cnt[p.id][sh.code] = (cnt[p.id][sh.code]||0)+1;
+      });
+    }
+    // 兜底：仍未分配的人进最大岗
+    if(wShifts.length){
+      const maxCode = (wShifts.slice().sort((a,b)=>(q[b.code]||0)-(q[a.code]||0))[0]||wShifts[0]).code;
+      workers.forEach(p=>{
+        if(!assigned.has(p.id)){
+          ensure(p.id)[d] = {s:maxCode, n:''};
+          cnt[p.id][maxCode]=(cnt[p.id][maxCode]||0)+1;
+        }
+      });
+    }
+  }
+  sched.value.cells = cells;
+  S.gen.open=false;
+  showToast(`${S.month}月排班初稿已生成，可点击格子微调`);
+}
+
+/* ---------- 格子编辑 ---------- */
+function openCell(p,d){
+  if(!isActive(p,d)){ showToast('该人员已离职，不可排班'); return; }
+  const c = getCell(p.id,d);
+  S.cellEdit = {open:true, pid:p.id, day:d, p, code:c.s, note:c.n||'', fillEnd:d};
+}
+function pickShift(code){
+  S.cellEdit.code = code;
+  setCellRange(S.cellEdit.pid, S.cellEdit.day, S.cellEdit.day, code, S.cellEdit.note);
+}
+function applyRange(){
+  if(!S.cellEdit.code){ showToast('请先选择班次'); return; }
+  const a = S.cellEdit.day, b = Math.max(a, Math.min(dim.value, Number(S.cellEdit.fillEnd)||a));
+  setCellRange(S.cellEdit.pid, a, b, S.cellEdit.code, S.cellEdit.note);
+  showToast(`已填充 ${a}日 ~ ${b}日`);
+}
+function setCellRange(pid, d1, d2, code, note){
+  const row = sched.value.cells[pid] || (sched.value.cells[pid]={});
+  for(let d=d1; d<=d2; d++){
+    if(code) row[d] = {s:code, n: note||''};
+    else delete row[d];
+  }
+}
+
+/* ---------- 导入排班 Excel ---------- */
+async function onFileSched(e){
+  const f = e.target.files[0]; e.target.value='';
+  if(!f) return;
+  try{
+    const data = await readFile(f);
+    const isCsv = /\.csv$/i.test(f.name);
+    const wb = XLSX.read(data, {type:isCsv?'string':'array'});
+    importScheduleWB(wb, f.name);
+  }catch(err){ console.error(err); showToast('导入失败：'+err.message); }
+}
+function importScheduleWB(wb, fname){
+  // 找含 1..N 连续日期表头的 sheet
+  let target=null, rows=null;
+  for(const sn of wb.SheetNames){
+    const rs = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:''});
+    const hit = findDayHeader(rs);
+    if(hit){ target=sn; rows=rs; break; }
+  }
+  if(!target){ showToast('没识别到排班表格式（需要含 1~31 日期的表头）'); return; }
+  const {hr, dayCol} = findDayHeader(rows);
+  // 标题里的年月
+  let y=S.year, m=S.month;
+  const headText = rows.slice(0,hr+1).map(r=>r.join(' ')).join(' ');
+  const ym = headText.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
+  if(ym){ y=+ym[1]; m=+ym[2]; }
+  // 列定位
+  const nameCol = findCol(rows,hr,[/姓名|名字/])>=0 ? findCol(rows,hr,[/姓名|名字/]) : dayCol-1;
+  const empCol = findCol(rows,hr,[/工号|ID号|^ID$|编号/]);
+  const teamCol = findCol(rows,hr,[/班组|部门|组别|小组/]);
+  const monthDim = dimOf(y,m);
+  let added=0, updatedP=0, cells=0, unknown=new Set();
+  const teamDefault = (wb.SheetNames.length>1 && target)? target : '';
+  let teamCarry = '';
+
+  for(let ri=hr+1; ri<rows.length; ri++){
+    const row = rows[ri]||[];
+    let name = String(row[nameCol]??'').trim();
+    if(!name) continue;
+    if(/特别说明|制表|审核|审批|班次|^星期|周[一二三四五六日]/.test(name)) continue;
+    // 统计行：名称含 “班（” “班(”
+    if(/班\s*[（(]/.test(name) || /^[A-Za-z]班/.test(name)) continue;
+    // 星期行
+    if(name==='姓名' || (row.slice(dayCol,dayCol+3).every(c=>/^[一二三四五六日]$/.test(String(c).trim())))) continue;
+    // 班组：优先表头列，其次在姓名左侧自动识别（合并单元格向下继承）
+    let team = '';
+    if(teamCol>=0){
+      team = String(row[teamCol]??'').trim();
+    } else {
+      for(let c=0;c<nameCol;c++){
+        if(c===empCol) continue;
+        const v = String(row[c]??'').trim();
+        if(v && /[班组部科]/.test(v) && !/^\d+$/.test(v)){ team = v; break; }
+      }
+    }
+    if(team) teamCarry = team; else team = teamCarry || teamDefault;
+    const emp = empCol>=0?String(row[empCol]??'').trim():'';
+    const r = upsertPerson(name, /^\d+$/.test(emp)?emp:'', team, '');
+    if(r==='add') added++; else updatedP++;
+    const pid = (S.people.find(p=>p.name===name && (!emp||p.empId===emp))||S.people[S.people.length-1]).id;
+    const cellRow = {};
+    for(let d=1; d<=monthDim; d++){
+      let v = String(row[dayCol+d-1]??'').trim();
+      if(!v) continue;
+      if(/离职/.test(v)){
+        const p = S.people.find(x=>x.id===pid);
+        if(p) p.leaveDate = `${y}-${pad(m)}-${pad(d)}`;
+        continue;
+      }
+      v = v.replace(/[*＊\s]/g,'');
+      if(!v) continue;
+      if(!S.config.shifts.some(s=>s.code===v)){
+        unknown.add(v);
+        autoCreateShift(v);
+      }
+      cellRow[d] = {s:v, n:''};
+      cells++;
+    }
+    if(!S.scheds[`${y}-${m}`]) S.scheds[`${y}-${m}`] = {cells:{}};
+    S.scheds[`${y}-${m}`].cells[pid] = cellRow;
+  }
+  S.year=y; S.month=m;
+  let msg = `已从「${target}」导入：人员新增${added}人、更新${updatedP}人，排班格子${cells}个，已切换到${y}年${m}月。`;
+  if(unknown.size) msg += ` 自动新建班次代码：${[...unknown].join('、')}（可在班次页调整）。`;
+  showToast(msg);
+}
+function findDayHeader(rows){
+  for(let r=0;r<Math.min(rows.length,15);r++){
+    const row = rows[r]||[];
+    for(let c=0;c<Math.min(row.length,15);c++){
+      if(Number(row[c])===1 && Number(row[c+1])===2 && Number(row[c+2])===3){
+        return {hr:r, dayCol:c};
+      }
+    }
+  }
+  return null;
+}
+function autoCreateShift(code){
+  let type='work', color=AUTO_COLORS[S.config.shifts.length%AUTO_COLORS.length], textColor='#333';
+  if(code==='O'||code==='休'){ type='rest'; color='#F4F4F5'; textColor='#9CA3AF'; }
+  else if(code==='Y'||code.includes('年')){ type='leave'; color='#D4EDDA'; textColor='#155724'; }
+  else if(/事|病|假/.test(code)){ type='leave'; color='#F8D7DA'; textColor='#842029'; }
+  S.config.shifts.push({code, name:type==='work'?code+'班':code, start:'', end:'', color, textColor, type});
+  if(type==='work') S.config.quotas[code] = 0;
+}
+
+/* ---------- 导出 Excel ---------- */
+async function exportSchedule(){
+  if(!S.people.length){ showToast('没有人员数据'); return; }
+  try{
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '物业排班系统';
+    const groups = S.teamFilter==='__all'
+      ? teamList.value.length ? teamList.value.map(t=>({team:t, list:orderedPeople.value.filter(p=>p.team===t)})) : [{team:S.config.deptName||'排班', list:orderedPeople.value}]
+      : [{team:S.teamFilter, list:visiblePeople.value}];
+    groups.forEach(g=> buildSheet(wb, g.team||S.config.deptName||'排班', g.list));
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${S.config.deptName||'排班'}${S.year}年${S.month}月排班表.xlsx`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    showToast('已导出 Excel');
+  }catch(err){ console.error(err); showToast('导出失败：'+err.message); }
+}
+function buildSheet(wb, sheetName, people){
+  const dimN = dim.value;
+  const ws = wb.addWorksheet(sheetName.slice(0,31));
+  const thin = {style:'thin', color:{argb:'FF9AA5B1'}};
+  const border = {top:thin,left:thin,bottom:thin,right:thin};
+  const center = {vertical:'middle', horizontal:'center', wrapText:true};
+  const left = {vertical:'middle', horizontal:'left'};
+  const totalCols = 4 + dimN + 1;
+  ws.columns = [
+    {width:6},{width:12},{width:12},{width:10},
+    ...Array.from({length:dimN},()=>({width:4.6})),
+    {width:7}
+  ];
+  // 标题
+  ws.mergeCells(1,1,1,totalCols);
+  const title = ws.getCell(1,1);
+  title.value = `${S.config.deptName||'物业'} ${S.year}年${S.month}月排班表`;
+  title.font = {size:16, bold:true};
+  title.alignment = center;
+  ws.getRow(1).height = 30;
+  // 表头
+  const h2 = ws.getRow(2), h3 = ws.getRow(3);
+  const heads = ['序号','班组','工号','姓名'];
+  heads.forEach((t,i)=>{ const c=h2.getCell(i+1); c.value=t; });
+  for(let d=1;d<=dimN;d++) h2.getCell(4+d).value = d;
+  h2.getCell(4+dimN+1).value = '出勤';
+  for(let d=1;d<=dimN;d++){
+    const c = h3.getCell(4+d);
+    c.value = '周'+weekday(d);
+    if(isWeekend(d)) c.font = {color:{argb:'FFDC2626'}};
+  }
+  [2,3].forEach(rn=>{
+    const r = ws.getRow(rn);
+    for(let c=1;c<=totalCols;c++){
+      const cell = r.getCell(c);
+      cell.alignment = center; cell.border = border;
+      cell.font = cell.font && cell.font.color ? cell.font : {bold:true};
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFD9E1F2'}};
+    }
+  });
+  // 人员行
+  let rowIdx = 4;
+  const teamRanges = [];
+  people.forEach((p,idx)=>{
+    const r = ws.getRow(rowIdx);
+    r.getCell(1).value = idx+1;
+    r.getCell(2).value = p.team||'';
+    r.getCell(3).value = p.empId||'';
+    r.getCell(4).value = p.name + (p.leaveDate?`（离职${p.leaveDate}）`:'');
+    let att=0;
+    for(let d=1;d<=dimN;d++){
+      const cell = r.getCell(4+d);
+      if(!isActive(p,d)){
+        if(d===leaveDay(p)){ cell.value='离职到期'; cell.font={italic:true,color:{argb:'FF9CA3AF'}}; }
+        continue;
+      }
+      const cd = getCell(p.id,d);
+      if(!cd.s) continue;
+      const sh = shiftByCode(cd.s);
+      cell.value = cd.s;
+      if(sh){
+        cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FF'+(sh.color||'FFFFFF').replace('#','')}};
+        cell.font = {color:{argb:'FF'+(sh.textColor||'333333').replace('#','')}, bold:sh.type==='work'};
+        if(sh.type==='work') att++;
+      }
+      if(cd.n) cell.note = `排班备注：${cd.n}`;
+    }
+    r.getCell(4+dimN+1).value = att;
+    r.getCell(4+dimN+1).font = {bold:true};
+    for(let c=1;c<=totalCols;c++){
+      const cell=r.getCell(c); cell.border=border;
+      if(c<=4||c===totalCols) cell.alignment = c===4?left:center;
+      else cell.alignment = center;
+    }
+    teamRanges.push(rowIdx);
+    rowIdx++;
+  });
+  if(people.length>1) ws.mergeCells(4,2,rowIdx-1,2);
+  ws.getCell(4,2).alignment = center;
+  // 统计行
+  const statShifts = statRows.value;
+  rowIdx += 0;
+  statShifts.forEach(sh=>{
+    const r = ws.getRow(rowIdx);
+    ws.mergeCells(rowIdx,1,rowIdx,4);
+    const lab = r.getCell(1);
+    lab.value = `${sh.code} ${sh.name}${sh.start?`（${sh.start}-${sh.end}）`:''}`;
+    lab.alignment = left; lab.font={bold:true};
+    let total=0;
+    for(let d=1;d<=dimN;d++){
+      let n=0;
+      people.forEach(p=>{ if(isActive(p,d) && getCell(p.id,d).s===sh.code) n++; });
+      r.getCell(4+d).value = n; total+=n;
+    }
+    r.getCell(4+dimN+1).value = total;
+    for(let c=1;c<=totalCols;c++){
+      const cell=r.getCell(c); cell.border=border; cell.alignment=center;
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFF2F4F8'}};
+    }
+    rowIdx++;
+  });
+  // 说明栏
+  rowIdx++;
+  const notes = [];
+  notes.push('特别说明：1、严格按照此排班表执行。（不得私自更换排班，如有特殊情况需上报领班同意）');
+  const legend = S.config.shifts.filter(s=>s.type!=='leave').map(s=>`${s.code}=${s.name}${s.start?`(${s.start}-${s.end})`:''}`).join('；');
+  notes.push('班次说明：' + legend + '。');
+  notes.push('休假标注：休息统一为 O；年假 Y（绿色）；事假、病假等为红色，并在批注中注明（如：8月5日--8月7日年假共3天）。');
+  // 批注汇总
+  const noteList=[];
+  people.forEach(p=>{
+    for(let d=1;d<=dimN;d++){
+      const cd=getCell(p.id,d);
+      if(cd.n) noteList.push(`${p.name} ${S.month}月${d}日：${cd.n}`);
+    }
+  });
+  if(noteList.length) notes.push('批注汇总：' + noteList.join('；') + '。');
+  notes.push('制表人：　　　　　　审核人：　　　　　　审批人：');
+  notes.forEach(t=>{
+    ws.mergeCells(rowIdx,1,rowIdx,totalCols);
+    const c = ws.getCell(rowIdx,1);
+    c.value = t; c.alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    c.font = {size:11};
+    ws.getRow(rowIdx).height = 22;
+    rowIdx++;
+  });
+  // 冻结窗格
+  ws.views = [{state:'frozen', ySplit:3, xSplit:4}];
+}
+
+/* ---------- 备份 ---------- */
+function exportBackup(){
+  const data = {config:S.config, people:S.people, scheds:S.scheds, exportedAt:new Date().toISOString()};
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`排班系统备份_${S.year}${pad(S.month)}.json`; a.click();
+  showToast('备份已导出');
+}
+function onFileBackup(e){
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!d.config||!d.people||!d.scheds) throw new Error('文件格式不正确');
+      if(!confirm('导入备份将覆盖当前全部数据，确定？')) return;
+      S.config=d.config; S.people=d.people; S.scheds=d.scheds;
+      showToast('备份已恢复');
+    }catch(err){ showToast('恢复失败：'+err.message); }
+  };
+  r.readAsText(f);
+}
+function cellCount(key){
+  const sc=S.scheds[key]; if(!sc) return 0;
+  return Object.values(sc.cells).reduce((a,row)=>a+Object.keys(row).length,0);
+}
+function delMonth(key){
+  if(!confirm(`确定删除 ${key.replace('-','年')}月 的排班数据？`)) return;
+  delete S.scheds[key];
+}
+function resetAll(){
+  if(!confirm('确定要一键清除本地数据、恢复默认状态吗？\n\n将清空：人员、班次设置、全部月份的排班数据。')) return;
+  if(!confirm('最后确认：此操作不可恢复，确定继续吗？（建议先导出 JSON 备份）')) return;
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  const st = defaultState();
+  for(const k of Object.keys(S)) delete S[k];
+  Object.assign(S, st);
+  showToast('已恢复默认状态');
+}
+
+/* ---------- 示例数据 ---------- */
+function loadDemo(){
+  const teams=['秩序一班','秩序二班'];
+  const names=['庞晓璇','牟方鹏','韦建焕','侯永全','钟洋','周军','石富运','梁少杰','陈自强','赵祥宇','杨盼盼','李湘南','李骏博','卢建','韦志鹏','黄怡皓','李永','吴炜彬','何力','李江阳'];
+  names.forEach((nm,i)=>{
+    upsertPerson(nm, String(21600000+i), i<11?teams[0]:teams[1], i===12?`${S.year}-${pad(S.month)}-15`:'');
+  });
+  S.config.mode='property';
+  applyPreset('property');
+  showToast('示例人员已载入，点「生成初稿」试试');
+}
+
+function setColor(sh, ev){
+  sh.color = ev.target.value;
+  // 根据底色亮度自动选文字颜色
+  const hex = sh.color.replace('#','');
+  const r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+  const lum = (0.299*r+0.587*g+0.114*b)/255;
+  sh.textColor = lum>0.6 ? '#1F2937' : '#FFFFFF';
+}
+
+createApp({
+  data:()=>S,
+  watch:{
+    'cellEdit.note'(v){
+      if(S.cellEdit.open && S.cellEdit.code){
+        setCellRange(S.cellEdit.pid, S.cellEdit.day, S.cellEdit.day, S.cellEdit.code, v);
+      }
+    }
+  },
+  computed:{
+    dim:()=>dim.value,
+    schedKey:()=>schedKey.value,
+    yearOpts:()=>yearOpts.value,
+    workShifts:()=>workShifts.value,
+    restShift:()=>restShift.value,
+    statRows:()=>statRows.value,
+    teamList:()=>teamList.value,
+    orderedPeople:()=>orderedPeople.value,
+    visiblePeople:()=>visiblePeople.value,
+    activePeopleCount:()=>activePeopleCount.value,
+    warnings:()=>warnings.value,
+    filteredPeople:()=>filteredPeople.value,
+    genWarn:()=>genWarn.value
+  },
+  methods:{
+    pad, shiftMonth, weekday, isWeekend, isActive, leaveDay, getCell, cellText, cellStyle,
+    swatchStyle, btnStyle, timeText, pStats, dayStat, statTotal,
+    addPerson, editPerson, removePerson, resetForm, triggerFile,
+    onFilePeople, importPasted, downloadTemplate, exportPeople,
+    switchMode, applyPreset, addShift, setColor,
+    openGen, doGenerate, openCell, pickShift, applyRange,
+    onFileSched, exportSchedule, exportBackup, onFileBackup,
+    cellCount, delMonth, resetAll, loadDemo
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
